@@ -2,7 +2,12 @@ import random
 import numpy as np 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+
+random.seed(0)
 actions={'E':(1,0),'N':(0,1),'W':(-1,0),'S':(0,-1)}
+
+print("Testing Begins")
+
 class Grid:
     def __init__(self,xdim,ydim,walls=[],add_boundary=True,goal=None):
         self.rows = ydim
@@ -32,10 +37,18 @@ class Grid:
             # print(r,c)
             if r>=0 and c>=0:
                 self.grid[r,c]=1
+    
     def isValid(self,pos):
+        """ XY Input """
         r,c=self.rows-pos[1]-1,pos[0]
-        return self.grid[r,c]!=1
+        if r >=0 and r < self.rows and c>=0 and c<self.cols:
+            return True
+        return False
+    
     def typeOfCell(self,pos):
+        """ XY Input """
+        
+        assert self.isValid(pos), "Cell Number Out of Bounds"
         r,c=self.rows-pos[1]-1,pos[0]
         if self.grid[r,c]==-1:
             return "Goal"
@@ -110,19 +123,19 @@ def transition(s,a,s_dash):
 
 print(transition((1,1),'N',(2,1)))
 
-def reward(s):
+def reward(g,s):
     """
     Returns the reward
     s:state given by position tuple(x,y)
     """
-    # print(g.typeOfCell(s))
     if g.typeOfCell(s)=="Wall":
         return -1
     elif g.typeOfCell(s)=="Goal":
         return 100
     else:
         return 0
-print(reward((48,12)))
+print(reward(g,(48,12)))
+
 class Agent:
     def __init__(self,init_pos,grid,path=[]) :
         self.pos = init_pos
@@ -147,11 +160,113 @@ class Agent:
         return self.pos
 
 a=Agent((1,1),g)
-a.take_step('S')
+a.take_step('N')
 print(a.pos)
 
+point = (25,13)
+print(a.grid.isValid(point))
+print(a.grid.typeOfCell(point))
 
+print("Testing Ends")
+print("Part-1 Value Iteration Begins")
 
+def xytoRC(pos,rows,cols):
+    """ XY to RC Transformation """
+    row,col=rows-pos[1]-1,pos[0]
+    return row,col
 
-# if __name__ == '__main__':
+def value_iteration(thresh,agent,gamma,num_itrs):
+    """
+    Parameters
+    ----------
+    thresh : float
+        thershold to decide conitnuation of algo.
+    agent : Class agent
+        The agent which is traversing the grid.
+    gamma : float
+        discount value.
+    num_itrs : int
+        maximum number of iterations to be allowed.
+
+    Returns
+    -------
+    Optimal Policy, Value Function.
+
+    """
     
+    rows = agent.grid.rows
+    cols = agent.grid.cols
+    V_init = np.random.randn(rows,cols)
+    V_k = V_init
+    
+    itr = 0
+    delta = thresh + 1 ## Just to get past the while condition on first epoch
+
+    while delta > thresh and itr < num_itrs:
+        
+        delta = 0
+        V_k_1 = np.zeros((rows,cols))
+        
+        for x in range(cols):
+            for y in range(rows):
+                
+                row,col = xytoRC((x,y),rows,cols)
+                
+                v = V_k[row][col]
+                s_bar_arr = []
+                
+                x,y = col,rows-row-1
+                
+                if agent.grid.typeOfCell((x,y)) == "Wall":
+                    V_k_1[row][col] = -1
+            
+                else:
+                
+                    if agent.grid.isValid((x+1,y)):
+                        s_bar_arr.append((x+1,y))
+                        
+                    if agent.grid.isValid((x,y+1)):
+                        s_bar_arr.append((x,y+1))
+                    
+                    if agent.grid.isValid((x-1,y)):
+                        s_bar_arr.append((x-1,y))
+                        
+                    if agent.grid.isValid((x,y-1)):
+                        s_bar_arr.append((x,y-1))
+                    
+            
+                    temp_var = -10000
+                    
+                    for action in actions :
+                        
+                        sum_var = 0
+                        for s_bar in s_bar_arr:
+                            
+                            if agent.grid.typeOfCell(s_bar) == "Wall":
+                               sum_var += transition((x,y),action,s_bar)*(reward(agent.grid,s_bar)+gamma*V_k[row][col]) 
+                            else:
+                                r_s_bar,c_s_bar = xytoRC(s_bar,rows,cols)
+                                sum_var += transition((x,y),action,s_bar)*(reward(agent.grid,s_bar)+gamma*V_k[r_s_bar][c_s_bar])
+                        
+                        temp_var = max(temp_var,sum_var)
+                        
+        
+                    V_k_1[row][col]= temp_var
+                    #policy[row][col]= best_action
+                    
+                    delta = max(delta,abs(v-temp_var))
+                
+        V_k = V_k_1.copy()
+        
+        V_k_plot = V_k.copy()
+        min_val = np.amin(V_k_plot)
+        V_k_plot = V_k_plot - min_val
+        plt.imshow(V_k_plot,cmap='gray')
+        plt.show()   
+        itr += 1
+        
+    
+    print("The total Number of iterations taken were: "+str(itr))
+    return V_k
+            
+V= value_iteration(0.1, a, 0.99, 100)
