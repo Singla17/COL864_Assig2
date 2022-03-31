@@ -198,6 +198,7 @@ def value_iteration(thresh,agent,gamma,num_itrs):
     cols = agent.grid.cols
     V_init = np.random.randn(rows,cols)
     V_k = V_init
+    policy = [['-' for i in range(cols)] for j in range(rows)]
     
     itr = 0
     delta = thresh + 1 ## Just to get past the while condition on first epoch
@@ -221,7 +222,6 @@ def value_iteration(thresh,agent,gamma,num_itrs):
                     V_k_1[row][col] = -1
             
                 else:
-                
                     if agent.grid.isValid((x+1,y)):
                         s_bar_arr.append((x+1,y))
                         
@@ -236,7 +236,7 @@ def value_iteration(thresh,agent,gamma,num_itrs):
                     
             
                     temp_var = -10000
-                    
+                    best_action = "N"
                     for action in actions :
                         
                         sum_var = 0
@@ -247,13 +247,14 @@ def value_iteration(thresh,agent,gamma,num_itrs):
                             else:
                                 r_s_bar,c_s_bar = xytoRC(s_bar,rows,cols)
                                 sum_var += transition((x,y),action,s_bar)*(reward(agent.grid,s_bar)+gamma*V_k[r_s_bar][c_s_bar])
-                        
+                        temp_var_prev = temp_var
                         temp_var = max(temp_var,sum_var)
                         
-        
-                    V_k_1[row][col]= temp_var
-                    #policy[row][col]= best_action
+                        if temp_var_prev != temp_var:
+                            best_action = action
                     
+                    V_k_1[row][col]= temp_var
+                    policy[row][col]= best_action
                     delta = max(delta,abs(v-temp_var))
                 
         V_k = V_k_1.copy()
@@ -265,8 +266,66 @@ def value_iteration(thresh,agent,gamma,num_itrs):
         plt.show()   
         itr += 1
         
-    
     print("The total Number of iterations taken were: "+str(itr))
-    return V_k
+    return policy,V_k
             
-V= value_iteration(0.1, a, 0.99, 100)
+policy,V= value_iteration(0.1, a, 0.99, 100)
+
+
+def policyPlot(policy,rows,cols):
+    
+   
+    fig, ax = plt.subplots()
+    plt.xlim(-0.5,cols-0.5)
+    plt.ylim(-0.5,rows-0.5)
+    # plt.axis(False)
+    
+    for r in range (rows):
+        for c in range(cols):
+            x,y=c,rows-r-1
+            if policy[r][c]=='-':
+                ax.add_patch(Rectangle((x,y),
+                        1, 1,
+                        fc ='grey', 
+                        lw = None))
+            
+            elif policy[r][c]=='N':
+                ax.arrow(x+0.4, y+0.15,0,0.7,
+                        width = 0.2, length_includes_head=True, color ='red')
+                
+            elif policy[r][c]=='S':
+                ax.arrow(x+0.4, y+0.85,0,-0.7,
+                        width = 0.2, length_includes_head=True, color ='olive')
+            elif policy[r][c]=='E':
+                ax.arrow(x+0.15, y+0.4,0.7,0,
+                        width = 0.2, length_includes_head=True, color ='blue')
+            elif policy[r][c]=='W':
+                ax.arrow(x+0.85, y+0.4,-0.70,0,
+                        width = 0.2, length_includes_head=True, color ='black')
+            else:
+                ax.add_patch(Rectangle((x,y),
+                        1, 1,
+                        fc ='none',
+                        lw = None))
+    
+    major_xticks=np.arange(0,cols,5)
+    minor_xticks = np.arange(0,cols,1)
+    minor_yticks=np.arange(0,rows,1)
+    major_yticks=np.arange(0,rows,5)
+    
+    ax.set_xticks(major_xticks)
+    ax.set_xticks(minor_xticks, minor=True)
+    ax.set_yticks(major_yticks)
+    ax.set_yticks(minor_yticks, minor=True)
+    
+    ax.grid(which='both')
+    
+    plt.show()
+    
+    
+policyPlot(policy,25,50)
+    
+    
+             
+            
+            
