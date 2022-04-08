@@ -3,6 +3,7 @@ from typing import Tuple
 import numpy as np 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+from sympy import re
 
 random.seed(0)
 actions={'E':(1,0),'N':(0,1),'W':(-1,0),'S':(0,-1)}
@@ -239,11 +240,206 @@ for _ in range(num_eps):
         episode.append(reward(g,poss_state))
         pos=final_pos
     episodes.append(episode)
-print(episodes[0])       
+reward_dict={}
+def reward_estimate(grid,state:tuple)-> float:
+    """Gives estimated reward for state given from episodes
 
+    Args:
+        state (tuple): Position(x,y)
 
+    Returns:
+        float: reward for state given from episodes
+    """    
+    if state in reward_dict:
+        return reward_dict[state]
+    else:
+        rew_sum=0
+        num_state=0
+        for episode in episodes:
+            for i in range(3,len(episode),3):
+                if episode[i]==state:
+                    rew_sum+=episode[i-1]
+                    num_state+=1
+        reward_dict[state]=rew_sum/num_state if num_state!=0 else 0
+        return reward_dict[state]
 
+# print(reward_estimate((48,13)))
+# print(episodes[0])
+transition_dict={}
+def transition_estimate(s:tuple,a:str,s_dash:tuple)->float:
+    """Calculates the transition probabilities for the transition (s,a,s_dash)
+
+    Args:
+        s (tuple): State
+        a (str): Action
+        s_dash (tuple):State reached
+
+    Returns:
+        float: transition probability
+    """
+    if (s,a,s_dash) in transition_dict:
+        return transition_dict[(s,a,s_dash)]
+    else:
+        num_s_dash_visits=0
+        num_state_action=0
+        for episode in episodes:
+            for i in range(0,len(episode)-3,3):
+                if (episode[i],episode[i+1]) == (s,a):
+                    num_state_action+=1
+                    if episode[i+3]==s_dash:
+                        num_s_dash_visits+=1
+        
+        transition_dict[(s,a,s_dash)]=num_s_dash_visits/num_state_action if num_state_action !=0 else 0
+        return transition_dict[(s,a,s_dash)]
+# print(transition_estimate((48,18),'E',(47,18)))
+def value_iteration(thresh,agent,gamma,num_itrs,transition,reward):
+    """
+    Parameters
+    ----------
+    thresh : float
+        thershold to decide conitnuation of algo.
+    agent : Class agent
+        The agent which is traversing the grid.
+    gamma : float
+        discount value.
+    num_itrs : int
+        maximum number of iterations to be allowed.
+
+    Returns
+    -------
+    Optimal Policy, Value Function.
+
+    """
     
-             
+    rows = agent.grid.rows
+    cols = agent.grid.cols
+    V_init = np.random.randn(rows,cols)
+    V_k = V_init
+    policy = [['-' for i in range(cols)] for j in range(rows)]
+    
+    itr = 0
+    delta = thresh + 1 ## Just to get past the while condition on first epoch
+
+    while delta > thresh and itr < num_itrs:
+        # print(itr)
+        delta = 0
+        V_k_1 = np.zeros((rows,cols))
+        
+        for x in range(cols):
+            for y in range(rows):
+                
+                row,col = xytoRC((x,y),rows,cols)
+                
+                v = V_k[row][col]
+                s_bar_arr = []
+                
+                x,y = col,rows-row-1
+                
+                if agent.grid.typeOfCell((x,y)) == "Wall":
+                    V_k_1[row][col] = -1
+            
+                else:
+                    if agent.grid.isValid((x+1,y)):
+                        s_bar_arr.append((x+1,y))
+                        
+                    if agent.grid.isValid((x,y+1)):
+                        s_bar_arr.append((x,y+1))
+                    
+                    if agent.grid.isValid((x-1,y)):
+                        s_bar_arr.append((x-1,y))
+                        
+                    if agent.grid.isValid((x,y-1)):
+                        s_bar_arr.append((x,y-1))
+                    
+            
+                    temp_var = -10000
+                    best_action = "N"
+                    for action in actions :
+                        
+                        sum_var = 0
+                        for s_bar in s_bar_arr:
+                            
+                            if agent.grid.typeOfCell(s_bar) == "Wall":
+                               sum_var += transition((x,y),action,s_bar)*(reward(agent.grid,s_bar)+gamma*V_k[row][col]) 
+                            else:
+                                r_s_bar,c_s_bar = xytoRC(s_bar,rows,cols)
+                                sum_var += transition((x,y),action,s_bar)*(reward(agent.grid,s_bar)+gamma*V_k[r_s_bar][c_s_bar])
+                        temp_var_prev = temp_var
+                        temp_var = max(temp_var,sum_var)
+                        
+                        if temp_var_prev != temp_var:
+                            best_action = action
+                    
+                    V_k_1[row][col]= temp_var
+                    policy[row][col]= best_action
+                    delta = max(delta,abs(v-temp_var))
+                
+        V_k = V_k_1.copy()
+        
+        V_k_plot = V_k.copy()
+        min_val = np.amin(V_k_plot)
+        V_k_plot = V_k_plot - min_val
+        plt.imshow(V_k_plot,cmap='gray')
+        plt.show()   
+        itr += 1
+        
+    print("The total Number of iterations taken were: "+str(itr))
+    return policy,V_k
+
+policy,V= value_iteration(0.1, a, 0.99, 100,transition_estimate,reward_estimate)
+
+
+def policyPlot(policy,rows,cols):
+    
+   
+    fig, ax = plt.subplots()
+    plt.xlim(-0.5,cols-0.5)
+    plt.ylim(-0.5,rows-0.5)
+    # plt.axis(False)
+    
+    for r in range (rows):
+        for c in range(cols):
+            x,y=c,rows-r-1
+            if policy[r][c]=='-':
+                ax.add_patch(Rectangle((x,y),
+                        1, 1,
+                        fc ='grey', 
+                        lw = None))
+            
+            elif policy[r][c]=='N':
+                ax.arrow(x+0.4, y+0.15,0,0.7,
+                        width = 0.2, length_includes_head=True, color ='red')
+                
+            elif policy[r][c]=='S':
+                ax.arrow(x+0.4, y+0.85,0,-0.7,
+                        width = 0.2, length_includes_head=True, color ='olive')
+            elif policy[r][c]=='E':
+                ax.arrow(x+0.15, y+0.4,0.7,0,
+                        width = 0.2, length_includes_head=True, color ='blue')
+            elif policy[r][c]=='W':
+                ax.arrow(x+0.85, y+0.4,-0.70,0,
+                        width = 0.2, length_includes_head=True, color ='black')
+            else:
+                ax.add_patch(Rectangle((x,y),
+                        1, 1,
+                        fc ='none',
+                        lw = None))
+    
+    major_xticks=np.arange(0,cols,5)
+    minor_xticks = np.arange(0,cols,1)
+    minor_yticks=np.arange(0,rows,1)
+    major_yticks=np.arange(0,rows,5)
+    
+    ax.set_xticks(major_xticks)
+    ax.set_xticks(minor_xticks, minor=True)
+    ax.set_yticks(major_yticks)
+    ax.set_yticks(minor_yticks, minor=True)
+    
+    ax.grid(which='both')
+    
+    plt.show()
+    
+    
+policyPlot(policy,25,50)
             
             
