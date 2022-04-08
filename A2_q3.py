@@ -150,6 +150,8 @@ class Agent:
             prob=0.8 if action==a else 0.2/3
             wts.append(prob)
         act=random.choices(l,wts)[0]
+        prob=0.8 if act==a else 0.2/3
+        # print(a,act,prob)
         new_pos=self.pos[0]+actions[act][0],self.pos[1]+actions[act][1]
         if self.grid.typeOfCell(new_pos)!="Wall":
             self.pos=new_pos
@@ -190,7 +192,7 @@ def balanced_wandering(pos:tuple,g,counts:dict)->str:
         counts[pos][min_act]=counts[pos].get(min_act,0)+1
         return min_act
     else:
-        act= random.choice(['N','S','E','W'])
+        act= random.choice('NSEW')
         counts[pos]={}
         counts[pos][act]=1
         return act
@@ -204,17 +206,22 @@ state_count={}
 for x in range(0,50):
     for y in range(0,25):
         pos=(x,y)
-        state_count[pos]=0
+        if g.typeOfCell(pos)!='Wall':
+            state_count[pos]=0
 # print(state_count.keys())
-num_eps=1
-max_sim_len=30
+# num_eps=1
+# max_sim_len=30
+num_eps=100
+max_sim_len=1000
+
+
 episodes=[]
 for _ in range(num_eps):
     episode=[]
-    # x,y=random.randint(1,48),random.randint(1,23)
-    # pos=(x,y)
-    x,y=48,13
+    x,y=random.randint(1,48),random.randint(1,23)
     pos=(x,y)
+    # x,y=48,13
+    # pos=(x,y)
     while g.typeOfCell(pos)=='Wall':
         x-=3
         pos=(x,y)
