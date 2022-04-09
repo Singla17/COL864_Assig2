@@ -1,4 +1,5 @@
 import random
+import stat
 from typing import Tuple
 import numpy as np 
 import matplotlib.pyplot as plt
@@ -214,9 +215,11 @@ for x in range(0,50):
 # max_sim_len=30
 num_eps=100
 max_sim_len=1000
-
-
+stds=[]
+mean_visits_per_state=[]
 episodes=[]
+state_count={}
+
 for _ in range(num_eps):
     episode=[]
     x,y=random.randint(1,48),random.randint(1,23)
@@ -229,7 +232,9 @@ for _ in range(num_eps):
     
     counts={}
     a=Agent(pos,g)
+
     for _ in range(max_sim_len):
+        state_count[pos]=state_count.get(pos,0)+1
         episode.append(pos)
         state_count[pos]+=1
         if g.typeOfCell(pos)=="Goal":
@@ -239,8 +244,19 @@ for _ in range(num_eps):
         final_pos,poss_state=a.take_step(action)
         episode.append(reward(g,poss_state))
         pos=final_pos
+    mean_visits_per_state.append(sum(list(state_count.values()))/len(list(state_count.keys())))
+    temp=np.array(list(state_count.values()))
+    stds.append(np.std(temp))
     episodes.append(episode)
 reward_dict={}
+fig,ax=plt.subplots()
+x=np.arange(1,num_eps+1)
+plt.plot(x,mean_visits_per_state)
+plt.xlabel('Episodes')
+plt.ylabel('Mean Visits per state')
+plt.title('MEAN VISITS PER STATE')
+plt.errorbar(x, mean_visits_per_state, yerr = stds, fmt ='o')
+plt.show()
 def reward_estimate(grid,state:tuple)-> float:
     """Gives estimated reward for state given from episodes
 
@@ -386,7 +402,7 @@ def value_iteration(thresh,agent,gamma,num_itrs,transition,reward):
     print("The total Number of iterations taken were: "+str(itr))
     return policy,V_k
 
-policy,V= value_iteration(0.1, a, 0.99, 100,transition_estimate,reward_estimate)
+# policy,V= value_iteration(0.1, a, 0.99, 100,transition_estimate,reward_estimate)
 
 
 def policyPlot(policy,rows,cols):
@@ -440,6 +456,6 @@ def policyPlot(policy,rows,cols):
     plt.show()
     
     
-policyPlot(policy,25,50)
+# policyPlot(policy,25,50)
             
             
