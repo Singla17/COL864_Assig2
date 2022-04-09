@@ -5,6 +5,8 @@ from matplotlib.patches import Rectangle
 
 random.seed(0)
 actions={'E':(1,0),'N':(0,1),'W':(-1,0),'S':(0,-1)}
+action_int_to_str = {0:'E',1:'N',2:'S',3:'W'}
+action_str_to_int = {'E':0,'N':1,'S':2,'W':3}
 
 print("Testing Begins")
 
@@ -154,40 +156,108 @@ class Agent:
             wts.append(prob)
         act=random.choices(l,wts)[0]
         new_pos=self.pos[0]+actions[act][0],self.pos[1]+actions[act][1]
+        
+        status = "Wall"
         if self.grid.typeOfCell(new_pos)!="Wall":
             self.pos=new_pos
+            status = "Fine"
+            
         
-        return self.pos
+        return self.pos,status
 
 a=Agent((1,1),g)
-a.take_step('N')
-print(a.pos)
-
-point = (25,13)
-print(a.grid.isValid(point))
-print(a.grid.typeOfCell(point))
-
+pos,status = a.take_step('W')
+print(pos,status)
 print("Testing Ends")
-print("Part-1 Value Iteration Begins")
+
+print("Part-2 Q Learning Begins")
 
 def xytoRC(pos,rows,cols):
     """ XY to RC Transformation """
     row,col=rows-pos[1]-1,pos[0]
     return row,col
 
-def value_iteration(thresh,agent,gamma,num_itrs):
+def action_extractor(Q,row,col,epsilon):
     """
     Parameters
     ----------
-    thresh : float
-        thershold to decide conitnuation of algo.
+    Q : NP matrix
+        Q(s,a) matrix.
+    row : int
+        row no. of state under observation.
+    col : int
+        col no. of state under observation
+    epsilon : float
+        Wieght to give to choosing the best action.
+
+    Returns
+    -------
+    string
+        Action to be taken.
+
+    """
+    
+    best_q = -1000000000
+    best_action = -1
+    for var in range(len(actions.keys())):
+        if Q[row][col][var]>best_q :
+            best_q = Q[row][col][var]
+            best_action = var
+            
+    l = [0,1]
+    wts = [1-epsilon,epsilon]
+    
+    num_choosed=random.choices(l,wts)[0]
+    
+    if num_choosed == 0:
+        return action_int_to_str[best_action]
+    else:
+        rand_act= random.choice('NSEW')
+        return rand_act
+    
+def best_q_val_extractor(Q,row,col):
+    """
+    Parameters
+    ----------
+    Q : NP matrix
+        Q(s,a) matrix.
+    row : int
+        row no. of state under observation.
+    col : int
+        col no. of state under observation
+    
+    Returns
+    -------
+    float
+        Q val corresponding to best action.
+
+    """
+    
+    best_q = -1000000000
+    for var in range(len(actions.keys())):
+        if Q[row][col][var]>best_q :
+            best_q = Q[row][col][var]
+               
+    return best_q
+
+def q_learning(num_episodes,max_steps,alpha,epsilon,gamma,agent):
+    """
+    Parameters
+    ----------
+    num_episodes : int
+        Number of episodes for algo.
+    max_steps : int
+        Maximum Number of steps in an episode
+    alpha : float
+        learning rate for Q-Learning
+    epsilon : float
+        Exploration constant for Q-Learning
+    gamma : float
+        Discount factor
     agent : Class agent
         The agent which is traversing the grid.
-    gamma : float
-        discount value.
-    num_itrs : int
-        maximum number of iterations to be allowed.
-
+    
+    
     Returns
     -------
     Optimal Policy, Value Function.
@@ -196,80 +266,54 @@ def value_iteration(thresh,agent,gamma,num_itrs):
     
     rows = agent.grid.rows
     cols = agent.grid.cols
-    V_init = np.random.randn(rows,cols)
-    V_k = V_init
+    Q = np.random.randn(rows,cols,len(actions.keys()))
+    
+    goal_x,goal_y = agent.grid.goal
+    row_g,col_g = xytoRC((goal_x,goal_y),rows,cols)
+    for var in range(len(actions.keys())):
+        Q[row_g][col_g][var]=0
+        
+    
     policy = [['-' for i in range(cols)] for j in range(rows)]
     
-    itr = 0
-    delta = thresh + 1 ## Just to get past the while condition on first epoch
+    
+    for episode_no in range(num_episodes):
+        
+        x,y=random.randint(1,48),random.randint(1,23)
+        pos=(x,y)
+        while agent.grid.typeOfCell(pos)=='Wall':
+            x-=3
+            pos=(x,y)
+        row,col = xytoRC((x,y),rows,cols)
+        agent.pos = pos
+        
+        for step in range(max_steps):
+            
+            action=action_extractor(Q, row, col, epsilon)   
+            pos_next,status = agent.take_step(action)
+            row_next,col_next = xytoRC(pos_next,rows,cols)
+            
+            reward = 0
+            if status == "Wall":
+                reward = -1  
+            if pos_next == agent.goal :
+                reward = 100
+            
+            Q[row][col][action_str_to_int[action]] = Q[row][col][action_str_to_int[action]] \
+                + alpha*reward \
+                - alpha*Q[row][col][action_str_to_int[action]] \
+                + alpha*gamma*best_q_val_extractor(Q, row_next, col_next)
+              
+            pos = pos_next
+            row = row_next
+            col = col_next
+            
+            if reward == 100:
+                break
 
-    while delta > thresh and itr < num_itrs:
-        
-        delta = 0
-        V_k_1 = np.zeros((rows,cols))
-        
-        for x in range(cols):
-            for y in range(rows):
-                
-                row,col = xytoRC((x,y),rows,cols)
-                
-                v = V_k[row][col]
-                s_bar_arr = []
-                
-                x,y = col,rows-row-1
-                
-                if agent.grid.typeOfCell((x,y)) == "Wall":
-                    V_k_1[row][col] = -1
+    return policy
             
-                else:
-                    if agent.grid.isValid((x+1,y)):
-                        s_bar_arr.append((x+1,y))
-                        
-                    if agent.grid.isValid((x,y+1)):
-                        s_bar_arr.append((x,y+1))
-                    
-                    if agent.grid.isValid((x-1,y)):
-                        s_bar_arr.append((x-1,y))
-                        
-                    if agent.grid.isValid((x,y-1)):
-                        s_bar_arr.append((x,y-1))
-                    
-            
-                    temp_var = -10000
-                    best_action = "N"
-                    for action in actions :
-                        
-                        sum_var = 0
-                        for s_bar in s_bar_arr:
-                            
-                            if agent.grid.typeOfCell(s_bar) == "Wall":
-                               sum_var += transition((x,y),action,s_bar)*(reward(agent.grid,s_bar)+gamma*V_k[row][col]) 
-                            else:
-                                r_s_bar,c_s_bar = xytoRC(s_bar,rows,cols)
-                                sum_var += transition((x,y),action,s_bar)*(reward(agent.grid,s_bar)+gamma*V_k[r_s_bar][c_s_bar])
-                        temp_var_prev = temp_var
-                        temp_var = max(temp_var,sum_var)
-                        
-                        if temp_var_prev != temp_var:
-                            best_action = action
-                    
-                    V_k_1[row][col]= temp_var
-                    policy[row][col]= best_action
-                    delta = max(delta,abs(v-temp_var))
-                
-        V_k = V_k_1.copy()
-        
-        V_k_plot = V_k.copy()
-        min_val = np.amin(V_k_plot)
-        V_k_plot = V_k_plot - min_val
-        plt.imshow(V_k_plot,cmap='gray')
-        plt.show()   
-        itr += 1
-        
-    print("The total Number of iterations taken were: "+str(itr))
-    return policy,V_k
-            
-policy,V= value_iteration(0.1, a, 0.99, 100)
+#policy,V= value_iteration(0.1, a, 0.99, 100)
 
 
 def policyPlot(policy,rows,cols):
@@ -322,8 +366,6 @@ def policyPlot(policy,rows,cols):
     
     plt.show()
     
-    
-policyPlot(policy,25,50)
     
     
              
