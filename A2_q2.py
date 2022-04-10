@@ -240,6 +240,36 @@ def best_q_val_extractor(Q,row,col):
                
     return best_q
 
+def best_q_action_extractor(Q,row,col):
+    """
+    Parameters
+    ----------
+    Q : NP matrix
+        Q(s,a) matrix.
+    row : int
+        row no. of state under observation.
+    col : int
+        col no. of state under observation
+    
+    Returns
+    -------
+    float
+        Q val corresponding to best action.
+        
+    str 
+        best action
+    """
+    
+    best_q = -1000000000
+    best_action = -1
+    for var in range(len(actions.keys())):
+        if Q[row][col][var]>best_q :
+            best_q = Q[row][col][var]
+            best_action = var
+            
+   
+    return best_q,best_action
+    
 def q_learning(num_episodes,max_steps,alpha,epsilon,gamma,agent):
     """
     Parameters
@@ -267,6 +297,7 @@ def q_learning(num_episodes,max_steps,alpha,epsilon,gamma,agent):
     rows = agent.grid.rows
     cols = agent.grid.cols
     Q = np.random.randn(rows,cols,len(actions.keys()))
+    V = np.random.randn(rows,cols)
     
     goal_x,goal_y = agent.grid.goal
     row_g,col_g = xytoRC((goal_x,goal_y),rows,cols)
@@ -296,7 +327,7 @@ def q_learning(num_episodes,max_steps,alpha,epsilon,gamma,agent):
             reward = 0
             if status == "Wall":
                 reward = -1  
-            if pos_next == agent.goal :
+            if pos_next == agent.grid.goal :
                 reward = 100
             
             Q[row][col][action_str_to_int[action]] = Q[row][col][action_str_to_int[action]] \
@@ -310,11 +341,17 @@ def q_learning(num_episodes,max_steps,alpha,epsilon,gamma,agent):
             
             if reward == 100:
                 break
-
-    return policy
+    
+    for x_v in range(cols):
+        for y_v in range(rows):
+            row_v,col_v = xytoRC((x_v,y_v), rows, cols)
+            V[row_v][col_v], p_ret= best_q_action_extractor(Q, row_v, col_v)
             
-#policy,V= value_iteration(0.1, a, 0.99, 100)
-
+            if agent.grid.typeOfCell((x_v,y_v)) != "Wall":
+                policy[row_v][col_v] = action_int_to_str[p_ret]
+    
+    return policy,V
+            
 
 def policyPlot(policy,rows,cols):
     
@@ -367,7 +404,11 @@ def policyPlot(policy,rows,cols):
     plt.show()
     
     
-    
-             
-            
-            
+policy,V= q_learning(4000,1000,0.25, 0.5, 0.99, a)
+
+min_val = np.amin(V)
+V = V - min_val
+plt.imshow(V,cmap='gray')
+plt.show()
+
+policyPlot(policy, 25, 50)
